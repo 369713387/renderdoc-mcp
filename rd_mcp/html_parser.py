@@ -5,18 +5,62 @@ from rd_mcp.models import ReportSummary
 import re
 
 class HTMLParser:
+    """Parser for RenderDoc HTML reports.
+
+    This class parses RenderDoc HTML capture reports and extracts
+    summary information such as API type, draw calls, shaders, and frame count.
+    """
+
     def __init__(self, report_path: str):
-        self.report_path = Path(report_path)
+        """Initialize the HTML parser with a report directory path.
+
+        Args:
+            report_path: Path to the RenderDoc HTML report directory
+
+        Raises:
+            FileNotFoundError: If the report directory does not exist
+            ValueError: If the path is not a directory
+        """
+        self.report_path = Path(report_path).resolve()
+        # Validate path exists and is a directory
+        if not self.report_path.exists():
+            raise FileNotFoundError(f"Report directory not found: {report_path}")
+        if not self.report_path.is_dir():
+            raise ValueError(f"Path must be a directory: {report_path}")
         self.soup = None
 
     def _load_html(self):
+        """Load the HTML report file into memory.
+
+        Raises:
+            FileNotFoundError: If index.html is not found in the report directory
+            ValueError: If the HTML file has encoding errors
+        """
         if self.soup is None:
             html_path = self.report_path / "index.html"
             if not html_path.exists():
                 raise FileNotFoundError(f"HTML report not found: {html_path}")
-            self.soup = BeautifulSoup(html_path.read_text(encoding="utf-8"), "lxml")
+
+            try:
+                content = html_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError as e:
+                raise ValueError(f"HTML file encoding error. Expected UTF-8: {e}")
+
+            self.soup = BeautifulSoup(content, "lxml")
 
     def extract_summary(self) -> ReportSummary:
+        """Extract summary information from the HTML report.
+
+        Parses the HTML report to extract key metrics including API type,
+        number of draw calls, shader count, and frame count.
+
+        Returns:
+            ReportSummary: Summary containing API type, draw calls, shaders, frames
+
+        Raises:
+            FileNotFoundError: If the HTML report file is not found
+            ValueError: If the HTML file has encoding errors
+        """
         self._load_html()
 
         # Extract API type from title or heading
