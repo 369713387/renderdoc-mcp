@@ -1,0 +1,12 @@
+{
+  "thresholds": {
+    "max_draw_calls": 1000,
+    "expensive_shader_instructions": 500,
+    "large_texture_size": 4096,
+    "overdraw_threshold": 2.5
+  },
+  "output": {
+    "include_raw_data": false,
+    "verbose": false
+  }
+}
