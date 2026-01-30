@@ -1,4 +1,3 @@
-# rd_mcp/config.py
 import json
 from pathlib import Path
 from dataclasses import dataclass
