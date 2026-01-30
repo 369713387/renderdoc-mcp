@@ -12,6 +12,16 @@ class Thresholds:
     large_texture_size: int = 4096
     overdraw_threshold: float = 2.5
 
+    def __post_init__(self):
+        if self.max_draw_calls <= 0:
+            raise ValueError(f"max_draw_calls must be positive, got {self.max_draw_calls}")
+        if self.expensive_shader_instructions < 0:
+            raise ValueError(f"expensive_shader_instructions must be non-negative, got {self.expensive_shader_instructions}")
+        if self.large_texture_size <= 0:
+            raise ValueError(f"large_texture_size must be positive, got {self.large_texture_size}")
+        if self.overdraw_threshold < 0:
+            raise ValueError(f"overdraw_threshold must be non-negative, got {self.overdraw_threshold}")
+
 @dataclass
 class OutputConfig:
     include_raw_data: bool = False
@@ -31,8 +41,11 @@ class Config:
                 output=OutputConfig()
             )
 
-        with open(config_path) as f:
-            data = json.load(f)
+        try:
+            with open(config_path) as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in config file {config_path}: {e}")
 
         return cls(
             thresholds=Thresholds(**data.get("thresholds", {})),
