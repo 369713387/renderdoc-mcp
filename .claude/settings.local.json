@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"echo $env:APPDATA\")",
+      "Bash(dir:*)",
+      "Bash(dir \"C:\\\\Users$env:USERNAME\\\\AppData\\\\Roaming\\\\Claude\")",
+      "Bash(powershell:*)",
+      "Bash(bash:*)",
+      "Bash(wsl:*)",
+      "Bash(Select-String:*)",
+      "Skill(superpowers:brainstorming)",
+      "Bash(if not exist \"D:\\\\GitHubProject\\\\renderdoc_mcp\\\\docs\" mkdir \"D:\\\\GitHubProject\\\\renderdoc_mcp\\\\docs\")",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Skill(superpowers:requesting-code-review)",
+      "Bash(pip install:*)",
+      "Bash(pytest:*)",
+      "Bash(pip show:*)"
+    ]
+  }
+}

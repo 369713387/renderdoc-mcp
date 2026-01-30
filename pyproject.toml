@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rd-mcp"
+version = "0.1.0"
+description = "MCP server for analyzing RenderDoc HTML reports and detecting GPU performance issues"
+readme = "rd_mcp/README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "RenderDoc MCP Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "mcp>=0.1.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+rd-mcp = "rd_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/renderdoc-mcp"
+Repository = "https://github.com/your-org/renderdoc-mcp"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rd_mcp*"]
+
+[tool.setuptools.package-data]
+rd_mcp = ["config.json", "*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["rd_mcp/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --cov=rd_mcp --cov-report=html --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["rd_mcp"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

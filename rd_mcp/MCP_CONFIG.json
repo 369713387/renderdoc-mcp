@@ -1,0 +1,96 @@
+# MCP Server Configuration
+
+This file contains the MCP server configuration for the RenderDoc Analyzer.
+Copy the configuration below to your Claude Desktop settings file.
+
+## Claude Desktop Configuration Location
+
+### Windows
+```
+%APPDATA%\Claude\claude_desktop_config.json
+```
+Usually: `C:\Users\<username>\AppData\Roaming\Claude\claude_desktop_config.json`
+
+### macOS
+```
+~/Library/Application Support/Claude/claude_desktop_config.json
+```
+
+### Linux
+```
+~/.config/Claude/claude_desktop_config.json
+```
+
+## Configuration
+
+Add the following to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "renderdoc": {
+      "command": "python",
+      "args": ["-m", "rd_mcp.server"],
+      "cwd": "D:\\GitHubProject\\renderdoc_mcp",
+      "env": {
+        "PYTHONPATH": "D:\\GitHubProject\\renderdoc_mcp"
+      }
+    }
+  }
+}
+```
+
+**Note:** Update `D:\\GitHubProject\\renderdoc_mcp` to your actual project path.
+
+## Usage
+
+After configuring:
+
+1. **Restart Claude Desktop** to load the new MCP server
+
+2. **Test the connection** in Claude:
+   ```
+   Can you analyze the RenderDoc report at D:/path/to/report?
+   ```
+
+3. **Available tools:**
+   - `analyze_report` - Comprehensive performance analysis
+   - `get_summary` - Quick report summary
+
+## Troubleshooting
+
+### Server doesn't start
+
+1. **Check Python path** - Make sure Python is in your PATH
+2. **Verify dependencies** - Run: `pip install -r rd_mcp/requirements.txt`
+3. **Check module path** - Verify `cwd` points to the correct directory
+
+### "Module not found" error
+
+Make sure the project root is in your PYTHONPATH or use the `env` section in the config.
+
+### Tools not appearing
+
+1. Check Claude Desktop logs for errors
+2. Verify the MCP server is running by testing manually:
+   ```bash
+   cd D:/GitHubProject/renderdoc_mcp
+   python -m rd_mcp.server
+   ```
+   (Should hang waiting for stdio input - this is normal)
+
+## Alternative: Direct Command
+
+If module import doesn't work, you can also use:
+
+```json
+{
+  "mcpServers": {
+    "renderdoc": {
+      "command": "python",
+      "args": ["D:\\GitHubProject\\renderdoc_mcp\\rd_mcp\\server.py"],
+      "cwd": "D:\\GitHubProject\\renderdoc_mcp"
+    }
+  }
+}
+```
