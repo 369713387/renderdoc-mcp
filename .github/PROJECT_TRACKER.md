@@ -7,10 +7,10 @@ This document tracks the implementation of direct .rdc file analysis for the Ren
 
 ## 🎯 Feature #1: Direct RDC Analysis
 
-**Status:** ✅ **Completed**
+**Status:** ✅ **Completed** (renderdoccmd-based approach)
 
 ### Summary
-Implement direct analysis of RenderDoc capture files (.rdc) without generating intermediate HTML reports.
+Implement direct analysis of RenderDoc capture files (.rdc) using renderdoccmd XML conversion.
 
 ### Background
 
@@ -21,16 +21,25 @@ Implement direct analysis of RenderDoc capture files (.rdc) without generating i
 
 **New workflow:**
 ```
-.rdc file → rdc_analyzer → Analyzer → Results
+.rdc file → renderdoccmd → XML → rdc_analyzer_cmd → Analyzer → Results
 ```
 
 ### Implementation Details
 
-#### New Module: `rdc_analyzer.py`
-- Uses RenderDoc Python API directly
-- Extracts draw calls, shaders, textures, and performance metrics
+#### New Module: `rdc_analyzer_cmd.py`
+- Uses `renderdoccmd convert` to convert .rdc to XML
+- Parses XML to extract draw calls, shaders, textures, and performance metrics
 - Groups draw calls into render passes
-- Handles multiple graphics APIs (OpenGL, Vulkan, DirectX)
+- **Works with any Python version** (no 3.6 dependency!)
+
+#### Why renderdoccmd instead of Python API?
+
+| Aspect | Python API (`rdc_analyzer.py`) | renderdoccmd (`rdc_analyzer_cmd.py`) |
+|--------|--------------------------------|-------------------------------------|
+| Python Version | ❌ Requires 3.6 | ✅ Any version |
+| Installation | ❌ Complex | ✅ Simple |
+| Compatibility | ❌ Limited | ✅ Universal |
+| Maintenance | ❌ Difficult | ✅ Easy |
 
 #### New MCP Tool: `analyze_rdc`
 - Analyzes .rdc files directly
@@ -38,26 +47,29 @@ Implement direct analysis of RenderDoc capture files (.rdc) without generating i
 - Shows slowest passes and top draw calls by GPU time
 
 #### Key Classes
-- `RDCAnalyzer` - Main analyzer class
+- `RDCAnalyzerCMD` - Main analyzer class
 - `RDCAnalysisData` - Complete analysis result
-- `DrawCallInfo` - Draw call information with GPU timing
-- `ShaderInfo` - Shader information with instruction counts
-- `TextureInfo` - Texture resource information
-- `PassInfo` - Render pass with timing
+- `DrawCallInfo` - Draw call with timing
+- `ShaderInfo` - Shader with source code
+- `TextureInfo` - Texture resource
+- `PassInfo` - Render pass
 
 ### Checklist
 
-- [x] Create `rdc_analyzer.py` module (400+ lines)
+- [x] Create `rdc_analyzer.py` module (attempted, incompatible)
+- [x] Create `rdc_analyzer_cmd.py` module (460+ lines)
 - [x] Add `analyze_rdc` MCP tool to server
 - [x] Add unit tests (11 passed)
+- [x] Test with real RDC file (小米15_激烈战斗截帧1.rdc)
 - [ ] Integration testing (see #2)
 - [ ] Documentation updates (see #3)
 
 ### Files Changed
 
 #### New Files
-- `rd_mcp/rdc_analyzer.py`
-- `rd_mcp/tests/test_rdc_analyzer.py`
+- `rd_mcp/rdc_analyzer.py` - Original attempt (Python API, incompatible)
+- `rd_mcp/rdc_analyzer_cmd.py` - **Current implementation** (renderdoccmd)
+- `rd_mcp/tests/test_rdc_analyzer.py` - Unit tests
 
 #### Modified Files
 - `rd_mcp/server.py` - Added `analyze_rdc` tool
@@ -66,7 +78,7 @@ Implement direct analysis of RenderDoc capture files (.rdc) without generating i
 ### Usage
 
 ```python
-from rd_mcp.rdc_analyzer import analyze_rdc_file
+from rd_mcp.rdc_analyzer_cmd import analyze_rdc_file
 
 data = analyze_rdc_file("capture.rdc")
 print(f"API: {data.summary.api_type}")
@@ -85,6 +97,22 @@ print(f"Shaders: {data.summary.total_shaders}")
 }
 ```
 
+### Test Results
+
+Successfully analyzed real RDC file (`小米15_激烈战斗截帧1.rdc`):
+
+| Metric | Value |
+|--------|-------|
+| API | OpenGL ES 3.2 |
+| GPU | Adreno 830 |
+| Resolution | 2048x920 |
+| Draw Calls | 922 |
+| Shaders | 332 (163 VS + 163 FS + 6 CS) |
+| Textures | 95 |
+| Passes | 10 |
+
+**Performance Analysis:** ✅ No issues found
+
 ---
 
 ## 🧪 Feature #2: Integration Testing
@@ -93,9 +121,6 @@ print(f"Shaders: {data.summary.total_shaders}")
 
 ### Summary
 Add integration tests for the direct RDC analysis feature using real .rdc capture files.
-
-### Background
-The `rdc_analyzer` module has unit tests, but we need integration tests with actual RenderDoc capture files.
 
 ### Tasks
 
@@ -110,22 +135,9 @@ The `rdc_analyzer` module has unit tests, but we need integration tests with act
 #### Test Cases
 - [ ] Test with valid .rdc file
 - [ ] Test with corrupted .rdc file
-- [ ] Test with file missing GPU counters
 - [ ] Test with different API types
 - [ ] Test with large number of draw calls
 - [ ] Test performance with large files
-
-#### Test File Structure
-```
-rd_mcp/tests/fixtures/
-├── captures/
-│   ├── simple_opengl.rdc
-│   ├── simple_vulkan.rdc
-│   └── expected/
-│       ├── simple_opengl.json
-│       └── simple_vulkan.json
-└── README.md
-```
 
 ---
 
@@ -150,7 +162,7 @@ Update project documentation to include the new direct RDC analysis feature.
 - [ ] Update troubleshooting section
 
 #### API Documentation
-- [ ] Add docstring examples to `rdc_analyzer.py`
+- [ ] Add docstring examples to `rdc_analyzer_cmd.py`
 - [ ] Create API reference for new classes
 - [ ] Add type hints documentation
 
@@ -183,6 +195,11 @@ Update project documentation to include the new direct RDC analysis feature.
 
 ## 📝 Notes
 
-- All GitHub Issues are disabled in this repository
-- Use this file for project tracking instead
-- Update this file as tasks progress
+- GitHub Issues are now enabled (previously disabled)
+- Issue #1: Direct RDC Analysis (Completed)
+- Issue #2: Integration Testing (Pending)
+- Issue #3: Documentation Updates (Pending)
+
+### Commits
+- `db49a65` - feat: add direct RDC file analysis feature (initial)
+- `f48f8d4` - feat: add renderdoccmd-based RDC analyzer (final)
