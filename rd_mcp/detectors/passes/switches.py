@@ -22,7 +22,8 @@ class PassSwitchesDetector(BaseDetector):
         max_switches = self.thresholds.get("max_switches_per_frame", 20)
         switch_info = self.extract_switch_info(draws)
 
-        if switch_info.total > max_switches:
+        if (switch_info.marker_switches + switch_info.fbo_switches +
+            switch_info.texture_bind_changes + switch_info.shader_changes) > max_switches:
             return [Issue(
                 type="pass_switches",
                 severity=IssueSeverity.WARNING,
