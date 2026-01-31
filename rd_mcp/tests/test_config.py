@@ -277,3 +277,50 @@ class TestOutputConfig:
         output = OutputConfig(include_raw_data=True, verbose=True)
         assert output.include_raw_data is True
         assert output.verbose is True
+
+
+class TestPresetConfiguration:
+    """Test preset-based configuration system."""
+
+    def test_load_preset_mobile_aggressive(self):
+        """Test loading mobile-aggressive preset"""
+        config = Config.load_preset("mobile-aggressive")
+        assert config.thresholds.geometry.max_draw_calls == 500
+        assert config.thresholds.geometry.max_triangles == 50000
+        assert config.thresholds.pass_.max_duration_ms == 0.3
+
+    def test_preset_override(self):
+        """Test user overrides merge with preset"""
+        config = Config.load_preset("mobile-aggressive", overrides={
+            "geometry": {"max_triangles": 80000}
+        })
+        assert config.thresholds.geometry.max_triangles == 80000
+        assert config.thresholds.geometry.max_draw_calls == 500  # Unchanged
+
+    def test_load_preset_mobile_balanced(self):
+        """Test loading mobile-balanced preset"""
+        config = Config.load_preset("mobile-balanced")
+        assert config.thresholds.geometry.max_draw_calls == 1000
+        assert config.thresholds.geometry.max_triangles == 100000
+        assert config.thresholds.pass_.max_duration_ms == 0.5
+
+    def test_load_preset_pc_balanced(self):
+        """Test loading pc-balanced preset"""
+        config = Config.load_preset("pc-balanced")
+        assert config.thresholds.geometry.max_draw_calls == 3000
+        assert config.thresholds.geometry.max_triangles == 2000000
+        assert config.thresholds.pass_.max_duration_ms == 1.0
+
+    def test_preset_not_found(self):
+        """Test error handling for missing preset"""
+        with pytest.raises(FileNotFoundError, match="Preset not found"):
+            Config.load_preset("nonexistent-preset")
+
+    def test_backward_compatibility(self):
+        """Test that existing Config.load() still works"""
+        config = Config.load()  # Load with defaults
+        # Should have new structure with defaults
+        assert hasattr(config.thresholds, 'geometry')
+        assert hasattr(config.thresholds, 'shader')
+        assert hasattr(config.thresholds, 'pass_')
+        assert hasattr(config.thresholds, 'memory')

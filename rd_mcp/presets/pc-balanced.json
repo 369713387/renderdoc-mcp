@@ -1,0 +1,24 @@
+{
+  "description": "PC端平衡性能优化",
+  "thresholds": {
+    "geometry": {
+      "max_draw_calls": 3000,
+      "max_triangles": 2000000,
+      "max_triangles_per_model": 100000
+    },
+    "shader": {
+      "max_vs_instructions": 500,
+      "max_fs_instructions": 500,
+      "max_cs_instructions": 1000
+    },
+    "pass": {
+      "max_duration_ms": 1.0,
+      "max_overdraw_ratio": 3.0,
+      "max_switches_per_frame": 20
+    },
+    "memory": {
+      "max_texture_size": 4096,
+      "require_compressed_textures": false
+    }
+  }
+}

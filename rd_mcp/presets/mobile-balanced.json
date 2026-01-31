@@ -1,0 +1,24 @@
+{
+  "description": "移动端平衡性能优化",
+  "thresholds": {
+    "geometry": {
+      "max_draw_calls": 1000,
+      "max_triangles": 100000,
+      "max_triangles_per_model": 30000
+    },
+    "shader": {
+      "max_vs_instructions": 200,
+      "max_fs_instructions": 300,
+      "max_cs_instructions": 500
+    },
+    "pass": {
+      "max_duration_ms": 0.5,
+      "max_overdraw_ratio": 2.5,
+      "max_switches_per_frame": 15
+    },
+    "memory": {
+      "max_texture_size": 2048,
+      "require_compressed_textures": false
+    }
+  }
+}
