@@ -4,3 +4,7 @@ lxml>=5.0.0
 pydantic>=2.0.0
 pytest>=7.4.0
 pytest-cov>=4.1.0
+
+# Note: renderdoc is not installed via pip.
+# Install RenderDoc from https://renderdoc.org/ to get the Python API.
+# The renderdoc package is available from the RenderDoc installation.
