@@ -24,9 +24,11 @@ class Analyzer:
         from pathlib import Path
         path = Path(config_path) if config_path else None
         self.config = Config.load(path)
-        self.drawcall_detector = DrawCallDetector(self.config.thresholds.__dict__)
-        self.shader_detector = ShaderDetector(self.config.thresholds.__dict__)
-        self.resource_detector = ResourceDetector(self.config.thresholds.__dict__)
+        # Convert thresholds to legacy flat dict for backward compatibility with detectors
+        thresholds_dict = self.config.thresholds.to_legacy_dict()
+        self.drawcall_detector = DrawCallDetector(thresholds_dict)
+        self.shader_detector = ShaderDetector(thresholds_dict)
+        self.resource_detector = ResourceDetector(thresholds_dict)
 
     def analyze(
         self,
