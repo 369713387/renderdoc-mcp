@@ -69,3 +69,96 @@ def test_all_severity_levels():
         issue = Issue(type="test", severity=severity,
                       description="test", location="test")
         assert issue.severity == severity
+
+
+def test_model_stats():
+    """Test ModelStats dataclass"""
+    from rd_mcp.models import ModelStats
+    stats = ModelStats(
+        name="Character",
+        draw_calls=10,
+        triangle_count=5000,
+        vertex_count=1500,
+        passes=["Geometry", "Shadow"]
+    )
+    assert stats.name == "Character"
+    assert stats.triangle_count == 5000
+    assert "Geometry" in stats.passes
+
+
+def test_pass_switch_info():
+    """Test PassSwitchInfo dataclass"""
+    from rd_mcp.models import PassSwitchInfo
+    info = PassSwitchInfo(
+        marker_switches=5,
+        fbo_switches=2,
+        texture_bind_changes=10,
+        shader_changes=3
+    )
+    assert info.total == 20
+
+
+def test_analysis_result_with_errors():
+    """Test AnalysisResult with errors field"""
+    result = AnalysisResult(
+        summary=ReportSummary(
+            api_type="OpenGL",
+            total_draw_calls=100,
+            total_shaders=10,
+            frame_count=1
+        ),
+        issues={"critical": [], "warnings": [], "suggestions": []},
+        metrics={},
+        errors=["test_error"]
+    )
+    assert len(result.errors) == 1
+    assert result.errors[0] == "test_error"
+
+
+def test_analysis_result_with_model_stats():
+    """Test AnalysisResult with model_stats field"""
+    from rd_mcp.models import ModelStats
+    result = AnalysisResult(
+        summary=ReportSummary(
+            api_type="Vulkan",
+            total_draw_calls=50,
+            total_shaders=5,
+            frame_count=1
+        ),
+        issues={"critical": [], "warnings": [], "suggestions": []},
+        metrics={},
+        model_stats={
+            "Character": ModelStats(
+                name="Character",
+                draw_calls=10,
+                triangle_count=5000,
+                vertex_count=1500,
+                passes=["Geometry"]
+            )
+        }
+    )
+    assert "Character" in result.model_stats
+    assert result.model_stats["Character"].triangle_count == 5000
+
+
+def test_analysis_result_with_pass_switches():
+    """Test AnalysisResult with pass_switches field"""
+    from rd_mcp.models import PassSwitchInfo
+    result = AnalysisResult(
+        summary=ReportSummary(
+            api_type="DirectX 11",
+            total_draw_calls=200,
+            total_shaders=15,
+            frame_count=1
+        ),
+        issues={"critical": [], "warnings": [], "suggestions": []},
+        metrics={},
+        pass_switches=PassSwitchInfo(
+            marker_switches=5,
+            fbo_switches=2,
+            texture_bind_changes=10,
+            shader_changes=3
+        )
+    )
+    assert result.pass_switches is not None
+    assert result.pass_switches.total == 20
