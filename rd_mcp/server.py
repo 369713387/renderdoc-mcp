@@ -22,7 +22,7 @@ from mcp.types import (
 
 from rd_mcp.html_parser import HTMLParser
 from rd_mcp.analyzer import Analyzer
-from rd_mcp.rdc_analyzer import RDCAnalyzer, analyze_rdc_file
+from rd_mcp.rdc_analyzer_cmd import analyze_rdc_file
 from rd_mcp.models import ReportSummary
 
 
@@ -121,9 +121,9 @@ async def handle_list_tools() -> list[Tool]:
             name="analyze_rdc",
             description=(
                 "Analyze a RenderDoc capture file (.rdc) directly without generating HTML. "
-                "Extracts draw calls, shaders, textures, and performance metrics. "
-                "Returns comprehensive analysis with issues categorized by severity. "
-                "This is the preferred method for automated analysis."
+                "Uses renderdoccmd to convert RDC to XML and extracts performance data. "
+                "Returns comprehensive analysis with draw calls, shaders, textures, and issues. "
+                "Requires RenderDoc to be installed. Works with any Python version."
             ),
             inputSchema={
                 "type": "object",
@@ -474,10 +474,8 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
 
     except FileNotFoundError as e:
         return [TextContent(type="text", text=f"Error: RDC file not found - {e}")]
-    except ImportError as e:
-        return [TextContent(type="text", text=f"Error: RenderDoc Python API not available - {e}")]
     except RuntimeError as e:
-        return [TextContent(type="text", text=f"Error: Failed to analyze RDC file - {e}")]
+        return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
         return [TextContent(type="text", text=f"Error: Analysis failed - {e}")]
 
