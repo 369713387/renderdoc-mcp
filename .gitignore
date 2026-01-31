@@ -11,3 +11,8 @@
 *.pyc
 *.html
 *.log
+
+# Claude settings
+.claude/settings.local.json
+.coverage
+htmlcov/
