@@ -85,11 +85,20 @@ Performs comprehensive analysis of a RenderDoc HTML report.
 **Parameters:**
 - `report_path` (required): Path to the RenderDoc HTML report directory
 - `config_path` (optional): Path to custom configuration file
+- `preset` (optional): Preset name to use (e.g., 'mobile-aggressive', 'mobile-balanced', 'pc-balanced')
 
 **Example usage in Claude:**
 
 ```
 Please analyze the RenderDoc report at D:/projects/my_game/capture/report
+```
+
+```
+Please analyze the RenderDoc report at D:/projects/my_game/capture/report using mobile-aggressive preset
+```
+
+```
+Please analyze the RenderDoc report at D:/projects/my_game/capture/report using preset pc-balanced
 ```
 
 **Returns:**
@@ -147,6 +156,50 @@ Reference your custom config when analyzing:
 ```
 Analyze the report at D:/capture/report using config at D:/custom_config.json
 ```
+
+## Preset Configurations
+
+The server includes predefined presets optimized for different development scenarios:
+
+### Available Presets
+
+1. **mobile-aggressive**: Strict thresholds for mobile optimization
+   - Max draw calls: 500
+   - Max shader instructions: 100-200
+   - Max texture size: 2048px
+   - Strict pass duration: 0.3ms
+
+2. **mobile-balanced**: Balanced thresholds for mid-range mobile devices
+   - Max draw calls: 1000
+   - Max shader instructions: 300-600
+   - Max texture size: 2048px
+   - Moderate pass duration: 0.5ms
+
+3. **pc-balanced**: Balanced thresholds for desktop gaming
+   - Max draw calls: 2000
+   - Max shader instructions: 500-1000
+   - Max texture size: 4096px
+   - Standard pass duration: 1.0ms
+
+### Using Presets
+
+Presets can be used instead of or in combination with custom configurations:
+
+```
+# Use a preset directly
+Analyze the report at D:/capture/report using mobile-aggressive preset
+
+# Use preset with custom overrides
+Analyze the report at D:/capture/report using pc-balanced preset with additional overrides
+```
+
+### Preset Priority Order
+
+1. Preset (highest priority)
+2. Custom config file
+3. Default configuration (lowest priority)
+
+If multiple configuration sources are provided, presets take precedence over config files, and both take precedence over defaults.
 
 ## RenderDoc Report Format
 
