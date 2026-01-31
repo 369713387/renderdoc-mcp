@@ -501,6 +501,12 @@ def format_rdc_analysis_result(result, rdc_data) -> str:
     lines.append(f"- Shaders: {result.summary.total_shaders}")
     lines.append(f"- Textures: {len(rdc_data.textures)}")
     lines.append(f"- Frames: {result.summary.frame_count}")
+
+    # Add total triangle count if model_stats available
+    if result.model_stats:
+        total_triangles = sum(stat.triangle_count for stat in result.model_stats.values())
+        lines.append(f"- Total Triangles: {total_triangles:,}")
+
     lines.append("")
 
     # Issues section
@@ -537,6 +543,46 @@ def format_rdc_analysis_result(result, rdc_data) -> str:
             lines.append(f"  Location: {issue.location}")
         lines.append("")
 
+    # Model Statistics section
+    lines.append("## Model Statistics")
+    if result.model_stats:
+        lines.append(f"Total models: {len(result.model_stats)}")
+        lines.append("")
+
+        # Sort by triangle count (descending) and take top 10
+        sorted_models = sorted(
+            result.model_stats.values(),
+            key=lambda m: m.triangle_count,
+            reverse=True
+        )[:10]
+
+        lines.append("### Top Models by Triangle Count")
+        for i, model in enumerate(sorted_models, 1):
+            lines.append(f"{i}. **{model.name}**")
+            lines.append(f"   - Triangles: {model.triangle_count:,}")
+            lines.append(f"   - Vertices: {model.vertex_count:,}")
+            lines.append(f"   - Draw calls: {model.draw_calls}")
+            if model.passes:
+                passes_str = ", ".join(model.passes[:3])  # Show up to 3 passes
+                if len(model.passes) > 3:
+                    passes_str += f" (and {len(model.passes) - 3} more)"
+                lines.append(f"   - Passes: {passes_str}")
+        lines.append("")
+    else:
+        lines.append("No model statistics available.")
+        lines.append("")
+
+    # Pass Switches section
+    if result.pass_switches is not None:
+        lines.append("## Pass Switches")
+        lines.append("### State Change Breakdown")
+        lines.append(f"- Marker switches: {result.pass_switches.marker_switches}")
+        lines.append(f"- FBO switches: {result.pass_switches.fbo_switches}")
+        lines.append(f"- Texture binding changes: {result.pass_switches.texture_bind_changes}")
+        lines.append(f"- Shader changes: {result.pass_switches.shader_changes}")
+        lines.append(f"- **Total: {result.pass_switches.total}**")
+        lines.append("")
+
     # Passes section
     if rdc_data.passes:
         lines.append("## Render Passes")
@@ -563,6 +609,15 @@ def format_rdc_analysis_result(result, rdc_data) -> str:
             lines.append(f"   - Duration: {draw.gpu_duration_ms:.4f}ms")
             if draw.marker:
                 lines.append(f"   - Pass: {draw.marker}")
+        lines.append("")
+
+    # Detection Errors section (if errors present)
+    if result.errors:
+        lines.append("## Detection Errors")
+        lines.append(f"Total errors: {len(result.errors)}")
+        lines.append("")
+        for error in result.errors:
+            lines.append(f"- {error}")
         lines.append("")
 
     return "\n".join(lines)
