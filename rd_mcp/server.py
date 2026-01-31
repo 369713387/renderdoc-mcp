@@ -22,8 +22,9 @@ from mcp.types import (
 
 from rd_mcp.html_parser import HTMLParser
 from rd_mcp.analyzer import Analyzer
-from rd_mcp.rdc_analyzer_cmd import analyze_rdc_file
+from rd_mcp.rdc_analyzer_cmd import analyze_rdc_file, analyze_rdc_with_mali
 from rd_mcp.models import ReportSummary
+from rd_mcp.rdc_analyzer_cmd import PassInfo
 
 
 # Create MCP server instance
@@ -123,7 +124,10 @@ async def handle_list_tools() -> list[Tool]:
                 "Analyze a RenderDoc capture file (.rdc) directly without generating HTML. "
                 "Uses renderdoccmd to convert RDC to XML and extracts performance data. "
                 "Returns comprehensive analysis with draw calls, shaders, textures, and issues. "
-                "Requires RenderDoc to be installed. Works with any Python version."
+                "Requires RenderDoc to be installed. Works with any Python version. "
+                "Supports preset configurations for different performance profiles. "
+                "When mali_enabled is True, uses Mali Offline Compiler (malioc) to analyze "
+                "shader GPU cycles and register usage for Mali GPUs."
             ),
             inputSchema={
                 "type": "object",
@@ -135,6 +139,23 @@ async def handle_list_tools() -> list[Tool]:
                     "config_path": {
                         "type": "string",
                         "description": "Optional path to custom configuration file"
+                    },
+                    "preset": {
+                        "type": "string",
+                        "enum": ["mobile-aggressive", "mobile-balanced", "pc-balanced"],
+                        "description": "Optional preset configuration for performance thresholds. "
+                                      "If both preset and config_path are provided, preset takes precedence."
+                    },
+                    "mali_enabled": {
+                        "type": "boolean",
+                        "description": "Enable Mali GPU shader analysis using malioc. "
+                                      "When enabled, analyzes shaders for GPU cycles, register usage, "
+                                      "and texture samples. Requires malioc to be installed. Default: false"
+                    },
+                    "mali_target_gpu": {
+                        "type": "string",
+                        "description": "Target Mali GPU for shader analysis. "
+                                      "Examples: 'Mali-G78', 'Mali-G710', 'Mali-G720'. Default: 'Mali-G78'"
                     }
                 },
                 "required": ["rdc_path"]
@@ -402,7 +423,8 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
     """Analyze a RenderDoc capture file (.rdc) directly.
 
     Args:
-        arguments: Tool arguments containing rdc_path and optional config_path
+        arguments: Tool arguments containing rdc_path and optional config_path, preset, 
+                   mali_enabled, and mali_target_gpu
 
     Returns:
         TextContent containing analysis results
@@ -412,18 +434,32 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text="Error: rdc_path is required")]
 
     config_path = arguments.get("config_path")
+    preset = arguments.get("preset")
+    mali_enabled = arguments.get("mali_enabled", False)
+    mali_target_gpu = arguments.get("mali_target_gpu", "Mali-G78")
 
     try:
-        # Initialize analyzer with optional custom config
-        from pathlib import Path
-        path = Path(config_path) if config_path else None
-        analyzer = Analyzer(config_path=path)
+        # Initialize analyzer with optional custom config or preset
+        if preset:
+            analyzer = Analyzer(preset=preset)
+        else:
+            from pathlib import Path
+            path = Path(config_path) if config_path else None
+            analyzer = Analyzer(config_path=path)
 
-        # Analyze RDC file directly
-        rdc_data = analyze_rdc_file(rdc_path)
+        # Analyze RDC file with optional Mali analysis
+        if mali_enabled:
+            rdc_data, mali_result = analyze_rdc_with_mali(
+                rdc_path,
+                mali_enabled=True,
+                mali_target_gpu=mali_target_gpu
+            )
+        else:
+            rdc_data = analyze_rdc_file(rdc_path)
+            mali_result = None
 
         # Convert RDC data to analysis format
-        from rd_mcp.models import ReportSummary, PassInfo
+        from rd_mcp.models import ReportSummary
 
         summary = ReportSummary(
             api_type=rdc_data.summary.api_type,
@@ -432,24 +468,26 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
             frame_count=rdc_data.summary.frame_count
         )
 
-        # Convert shaders to dict format
+        # Convert shaders to dict format (use getattr for compatibility)
+        # Include source for Mali complexity analysis if available
         shaders = {
             name: {
-                "instruction_count": shader.instruction_count,
-                "stage": shader.stage,
-                "binding_count": shader.binding_count
+                "instruction_count": getattr(shader, 'instruction_count', 0),
+                "stage": getattr(shader, 'stage', 'Unknown'),
+                "binding_count": getattr(shader, 'binding_count', 0),
+                "source": getattr(shader, 'source', None)
             }
             for name, shader in rdc_data.shaders.items()
         }
 
-        # Convert textures to list format
+        # Convert textures to list format (use getattr for compatibility)
         resources = [
             {
-                "name": tex.name,
-                "width": tex.width,
-                "height": tex.height,
-                "depth": tex.depth,
-                "format": tex.format
+                "name": getattr(tex, 'name', ''),
+                "width": getattr(tex, 'width', 0),
+                "height": getattr(tex, 'height', 0),
+                "depth": getattr(tex, 'depth', 1),
+                "format": getattr(tex, 'format', '')
             }
             for tex in rdc_data.textures
         ]
@@ -464,11 +502,13 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
             for pass_info in rdc_data.passes
         ]
 
-        # Perform analysis
-        result = analyzer.analyze(summary, shaders, resources, passes)
+        # Perform analysis with draws included
+        # Note: analyzer.analyze expects (summary, shaders, resources, draws, passes)
+        draws_list = rdc_data.draws if hasattr(rdc_data, 'draws') else None
+        result = analyzer.analyze(summary, shaders, resources, draws_list, passes)
 
-        # Format results
-        output = format_rdc_analysis_result(result, rdc_data)
+        # Format results (with optional Mali analysis)
+        output = format_rdc_analysis_result(result, rdc_data, mali_result)
 
         return [TextContent(type="text", text=output)]
 
@@ -480,12 +520,13 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text=f"Error: Analysis failed - {e}")]
 
 
-def format_rdc_analysis_result(result, rdc_data) -> str:
+def format_rdc_analysis_result(result, rdc_data, mali_result=None) -> str:
     """Format RDC analysis result as readable text.
 
     Args:
         result: AnalysisResult from analyzer
         rdc_data: Raw RDCAnalysisData from rdc_analyzer
+        mali_result: Optional MaliAnalysisResult from Mali shader analysis
 
     Returns:
         Formatted text output
@@ -619,6 +660,65 @@ def format_rdc_analysis_result(result, rdc_data) -> str:
         for error in result.errors:
             lines.append(f"- {error}")
         lines.append("")
+
+    # Mali GPU Shader Analysis section (if available)
+    if mali_result is not None:
+        lines.append("## Mali GPU Shader Analysis")
+        lines.append("")
+        
+        if mali_result.malioc_available:
+            lines.append(f"- Target GPU: {mali_result.target_gpu}")
+            lines.append(f"- malioc Version: {mali_result.malioc_version}")
+            lines.append(f"- Shaders Analyzed: {mali_result.total_shaders_analyzed}")
+            lines.append(f"- Complex Shaders: {len(mali_result.complex_shaders)}")
+            lines.append("")
+            
+            # Show slowest shaders by cycle count
+            if mali_result.shaders:
+                lines.append("### Slowest Shaders by GPU Cycles")
+                slowest = mali_result.get_slowest_shaders(10)
+                for i, shader in enumerate(slowest, 1):
+                    lines.append(f"{i}. **{shader.shader_name}** ({shader.stage})")
+                    lines.append(f"   - Total Cycles: {shader.total_cycles:.1f}")
+                    lines.append(f"   - Arithmetic: {shader.arithmetic_cycles:.1f}, Texture: {shader.texture_cycles:.1f}, Load/Store: {shader.load_store_cycles:.1f}")
+                    lines.append(f"   - Registers: {shader.work_registers} work, {shader.uniform_registers} uniform")
+                    if shader.stack_spilling:
+                        lines.append("   - ⚠️ Stack spilling detected!")
+                    if shader.texture_samples > 0:
+                        lines.append(f"   - Texture samples: {shader.texture_samples}")
+                lines.append("")
+            
+            # Show fragment shaders specifically (most performance critical)
+            fragment_shaders = mali_result.fragment_shaders
+            if fragment_shaders:
+                lines.append("### Fragment Shader Statistics")
+                lines.append(f"Total fragment shaders: {len(fragment_shaders)}")
+                avg_cycles = sum(s.total_cycles for s in fragment_shaders) / len(fragment_shaders)
+                max_cycles = max(s.total_cycles for s in fragment_shaders)
+                lines.append(f"- Average cycles: {avg_cycles:.1f}")
+                lines.append(f"- Maximum cycles: {max_cycles:.1f}")
+                lines.append("")
+            
+            # Show analysis errors/warnings if any
+            if mali_result.errors:
+                lines.append("### Mali Analysis Warnings")
+                for error in mali_result.errors:
+                    lines.append(f"- {error}")
+                lines.append("")
+        else:
+            lines.append("Mali Offline Compiler (malioc) not available.")
+            lines.append("")
+            lines.append("To enable Mali shader analysis:")
+            lines.append("1. Install ARM Mobile Studio from https://developer.arm.com/Tools%20and%20Software/Arm%20Mobile%20Studio")
+            lines.append("2. Set MALIOC_PATH environment variable to point to malioc executable")
+            lines.append("3. Or specify mali_malioc_path in configuration")
+            lines.append("")
+            
+            if mali_result.errors:
+                lines.append("Errors:")
+                for error in mali_result.errors:
+                    lines.append(f"- {error}")
+                lines.append("")
 
     return "\n".join(lines)
 

@@ -7,8 +7,12 @@ from rd_mcp.detectors.geometry.triangle_count import TriangleCountDetector
 from rd_mcp.detectors.geometry.model_stats import ModelStatsDetector
 from rd_mcp.detectors.passes.duration import PassDurationDetector
 from rd_mcp.detectors.passes.switches import PassSwitchesDetector
+from rd_mcp.detectors.shader.mali_complexity import MaliComplexityDetector
 from rd_mcp.models import ReportSummary, AnalysisResult
 from typing import Dict, List, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Analyzer:
@@ -51,6 +55,9 @@ class Analyzer:
         self.model_stats_detector = ModelStatsDetector(thresholds_dict)
         self.pass_duration_detector = PassDurationDetector(thresholds_dict)
         self.pass_switches_detector = PassSwitchesDetector(thresholds_dict)
+        
+        # Initialize Mali complexity detector (for mobile GPU analysis)
+        self.mali_complexity_detector = MaliComplexityDetector(thresholds_dict)
 
     def analyze(
         self,
@@ -141,6 +148,18 @@ class Analyzer:
                     issues[key].append(issue)
             except Exception as e:
                 errors.append(f"Error in pass analysis: {str(e)}")
+
+        # Run Mali complexity detector if enabled
+        # Note: Mali analysis requires shader source code, which may not always be available
+        try:
+            if self.mali_complexity_detector.is_enabled:
+                mali_issues = self.mali_complexity_detector.detect(shaders)
+                for issue in mali_issues:
+                    key = severity_map.get(issue.severity.value, issue.severity.value)
+                    issues[key].append(issue)
+        except Exception as e:
+            # Mali analysis is optional, don't fail the whole analysis
+            logger.debug(f"Mali complexity analysis skipped: {str(e)}")
 
         # Build metrics
         metrics = self._build_metrics(summary, issues, model_stats)

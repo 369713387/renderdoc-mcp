@@ -5,6 +5,7 @@ This module provides RDC analysis functionality by converting .rdc files
 to XML using renderdoccmd and parsing the XML to extract performance data.
 """
 import gc
+import logging
 import os
 import re
 import subprocess
@@ -13,7 +14,12 @@ import xml.etree.ElementTree as ET
 from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rd_mcp.detectors.shader.mali_complexity import MaliAnalysisResult
+
+logger = logging.getLogger(__name__)
 
 # Try to find renderdoccmd
 RENDERDOC_CMD_PATHS = [
@@ -68,6 +74,7 @@ class ShaderInfo:
     instruction_count: int = 0
     source_length: int = 0
     source: str = ""
+    binding_count: int = 0  # Added for compatibility with rdc_analyzer.py
 
 
 @dataclass
@@ -77,6 +84,7 @@ class TextureInfo:
     name: str
     width: int = 0
     height: int = 0
+    depth: int = 1  # Added for compatibility with rdc_analyzer.py
     format: str = ""
 
 
@@ -529,3 +537,98 @@ def analyze_rdc_file(rdc_path: str | Path,
     data.summary.total_shaders = len(data.shaders)
 
     return data
+
+
+def analyze_rdc_with_mali(
+    rdc_path: str | Path,
+    renderdoccmd_path: Optional[str] = None,
+    mali_enabled: bool = True,
+    mali_target_gpu: str = "Mali-G78",
+    mali_max_cycles: int = 50,
+    mali_max_registers: int = 32,
+    mali_malioc_path: Optional[str] = None,
+) -> tuple[RDCAnalysisData, Optional["MaliAnalysisResult"]]:
+    """Analyze an RDC file with optional Mali GPU shader analysis.
+    
+    This function extends analyze_rdc_file() with Mali Offline Compiler (malioc)
+    integration to provide detailed GPU cycle counts and performance metrics
+    for Mali GPUs.
+    
+    Args:
+        rdc_path: Path to the .rdc capture file
+        renderdoccmd_path: Optional path to renderdoccmd.exe
+        mali_enabled: Whether to run Mali shader analysis (default: True)
+        mali_target_gpu: Target Mali GPU for analysis (e.g., "Mali-G78", "Mali-G710")
+        mali_max_cycles: Maximum acceptable shader cycles threshold
+        mali_max_registers: Maximum work registers threshold
+        mali_malioc_path: Optional explicit path to malioc executable
+        
+    Returns:
+        Tuple of (RDCAnalysisData, MaliAnalysisResult or None)
+        
+    Example:
+        >>> data, mali_result = analyze_rdc_with_mali("capture.rdc")
+        >>> if mali_result and mali_result.malioc_available:
+        ...     for shader in mali_result.get_slowest_shaders(5):
+        ...         print(f"{shader.shader_name}: {shader.total_cycles} cycles")
+    """
+    # First, do standard RDC analysis
+    data = analyze_rdc_file(rdc_path, renderdoccmd_path)
+    
+    mali_result = None
+    
+    if mali_enabled:
+        try:
+            from rd_mcp.detectors.shader.mali_complexity import (
+                MaliComplexityDetector,
+                MaliAnalysisResult
+            )
+            
+            # Build Mali configuration
+            mali_config = {
+                "mali_enabled": True,
+                "mali_target_gpu": mali_target_gpu,
+                "mali_max_cycles": mali_max_cycles,
+                "mali_max_registers": mali_max_registers,
+            }
+            
+            if mali_malioc_path:
+                mali_config["mali_malioc_path"] = mali_malioc_path
+            
+            # Create detector and analyze shaders
+            detector = MaliComplexityDetector(mali_config)
+            
+            # Filter shaders with source code for Mali analysis
+            shaders_with_source = {
+                name: shader for name, shader in data.shaders.items()
+                if shader.source
+            }
+            
+            if shaders_with_source:
+                logger.info(f"Analyzing {len(shaders_with_source)} shaders with Mali Offline Compiler...")
+                mali_result = detector.analyze_shaders(shaders_with_source)
+                
+                if mali_result.malioc_available:
+                    logger.info(
+                        f"Mali analysis complete: {mali_result.total_shaders_analyzed} shaders analyzed, "
+                        f"{len(mali_result.complex_shaders)} complex shaders found"
+                    )
+                else:
+                    logger.warning("malioc not available - Mali analysis skipped")
+            else:
+                logger.info("No shaders with source code found for Mali analysis")
+                mali_result = MaliAnalysisResult()
+                mali_result.malioc_available = False
+                mali_result.errors.append("No shaders with source code available for analysis")
+                
+        except ImportError as e:
+            logger.warning(f"Failed to import Mali analysis module: {e}")
+        except Exception as e:
+            logger.error(f"Mali analysis failed: {e}")
+            # Return partial result with error
+            from rd_mcp.detectors.shader.mali_complexity import MaliAnalysisResult
+            mali_result = MaliAnalysisResult()
+            mali_result.malioc_available = False
+            mali_result.errors.append(f"Analysis failed: {str(e)}")
+    
+    return data, mali_result

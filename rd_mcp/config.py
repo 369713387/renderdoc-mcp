@@ -39,6 +39,58 @@ class ShaderThresholds:
 
 
 @dataclass
+class MaliThresholds:
+    """Mali GPU-specific shader analysis thresholds.
+    
+    These thresholds are used by the MaliComplexityDetector when
+    analyzing shaders with the Mali Offline Compiler (malioc).
+    """
+    # Enable/disable Mali analysis (defaults to False to avoid malioc-not-found messages)
+    enabled: bool = False
+    
+    # Target Mali GPU for analysis
+    target_gpu: str = "Mali-G78"
+    
+    # Cycle count thresholds
+    max_cycles: int = 50  # Maximum acceptable total cycles
+    max_cycles_critical: int = 100  # Cycles threshold for critical severity
+    
+    # Register usage thresholds
+    max_registers: int = 32  # Maximum work registers before warning
+    
+    # Texture and sampling thresholds
+    max_texture_samples: int = 8  # Maximum texture samples per shader
+    
+    # Branching thresholds
+    max_branches: int = 10  # Maximum branch instructions
+    
+    # Optional malioc path (None = auto-detect)
+    malioc_path: Optional[str] = None
+
+    def __post_init__(self):
+        if self.max_cycles < 0:
+            raise ValueError(f"max_cycles must be non-negative, got {self.max_cycles}")
+        if self.max_registers < 0:
+            raise ValueError(f"max_registers must be non-negative, got {self.max_registers}")
+        if self.max_texture_samples < 0:
+            raise ValueError(f"max_texture_samples must be non-negative, got {self.max_texture_samples}")
+        if self.max_branches < 0:
+            raise ValueError(f"max_branches must be non-negative, got {self.max_branches}")
+    
+    def to_detector_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format expected by MaliComplexityDetector."""
+        return {
+            "mali_enabled": self.enabled,
+            "mali_target_gpu": self.target_gpu,
+            "mali_max_cycles": self.max_cycles,
+            "mali_max_registers": self.max_registers,
+            "mali_max_texture_samples": self.max_texture_samples,
+            "mali_max_branches": self.max_branches,
+            "mali_malioc_path": self.malioc_path,
+        }
+
+
+@dataclass
 class PassThresholds:
     """Render pass-related performance thresholds."""
     max_duration_ms: float = 1.0
@@ -88,6 +140,7 @@ class Thresholds:
     shader: ShaderThresholds = field(default_factory=ShaderThresholds)
     pass_: PassThresholds = field(default_factory=PassThresholds)
     memory: MemoryThresholds = field(default_factory=MemoryThresholds)
+    mali: MaliThresholds = field(default_factory=MaliThresholds)
 
     def __init__(self, data=None, **kwargs):
         """
@@ -107,6 +160,7 @@ class Thresholds:
             self.shader = ShaderThresholds()
             self.pass_ = PassThresholds()
             self.memory = MemoryThresholds()
+            self.mali = MaliThresholds()
         else:
             # Delegate to from_dict for all other cases
             result = self.from_dict(data, **kwargs)
@@ -115,6 +169,7 @@ class Thresholds:
             self.shader = result.shader
             self.pass_ = result.pass_
             self.memory = result.memory
+            self.mali = result.mali
 
     @classmethod
     def from_legacy(cls, **kwargs) -> 'Thresholds':
@@ -180,6 +235,7 @@ class Thresholds:
             instance.shader = ShaderThresholds(**shader_kwargs)
             instance.pass_ = PassThresholds(**pass_kwargs)
             instance.memory = MemoryThresholds(**memory_kwargs)
+            instance.mali = MaliThresholds()  # Use defaults for legacy format
             return instance
         except ValueError as e:
             # Convert new field names to legacy field names in error messages
@@ -273,6 +329,7 @@ class Thresholds:
         instance.shader = ShaderThresholds(**data.get("shader", {}))
         instance.pass_ = PassThresholds(**data.get("pass", data.get("pass_", {})))
         instance.memory = MemoryThresholds(**data.get("memory", {}))
+        instance.mali = MaliThresholds(**data.get("mali", {}))
         return instance
 
     # Legacy compatibility properties (not stored fields)
@@ -305,7 +362,7 @@ class Thresholds:
         Returns:
             Dict with legacy field names and values
         """
-        return {
+        result = {
             "max_draw_calls": self.max_draw_calls,
             "max_triangles": self.geometry.max_triangles,
             "max_triangles_per_model": self.geometry.max_triangles_per_model,
@@ -320,6 +377,11 @@ class Thresholds:
             "max_texture_size": self.memory.max_texture_size,
             "require_compressed_textures": self.memory.require_compressed_textures
         }
+        
+        # Add Mali thresholds
+        result.update(self.mali.to_detector_dict())
+        
+        return result
 
 
 @dataclass

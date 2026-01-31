@@ -65,10 +65,13 @@ class HTMLParser:
 
         # Extract API type from title or heading
         api_type = "Unknown"
+
+        # Check title first
         title = self.soup.find("title")
         if title:
             text = title.get_text()
-            for api in ["OpenGL", "Vulkan", "DirectX", "Direct3D", "Metal"]:
+            # Prioritize more specific APIs first
+            for api in ["OpenGL ES", "Vulkan", "DirectX", "Direct3D", "Metal", "OpenGL"]:
                 if api in text:
                     api_type = api
                     break
@@ -76,13 +79,39 @@ class HTMLParser:
         # Extract metrics - look for common patterns in RenderDoc reports
         body = self.soup.get_text()
 
-        # Try to find draw call count
-        draw_match = re.search(r'(\d+)\s*(?:draw calls?|draws?)', body, re.IGNORECASE)
-        total_draw_calls = int(draw_match.group(1)) if draw_match else 0
+        # If not found in title, check body content
+        if api_type == "Unknown":
+            # Prioritize more specific APIs first
+            for api in ["OpenGL ES", "Vulkan", "DirectX", "Direct3D", "Metal", "OpenGL"]:
+                if api in body:
+                    api_type = api
+                    break
 
-        # Try to find shader count
-        shader_match = re.search(r'(\d+)\s*shaders?', body, re.IGNORECASE)
-        total_shaders = int(shader_match.group(1)) if shader_match else 0
+        # Try to find draw call count (be specific about "Draw Calls" first)
+        draw_match = re.search(r'<p><strong>Draw Calls:</strong>\s*([\d,]+)</p>', body, re.IGNORECASE)
+        if not draw_match:
+            # Look for "Draw Calls:" text before the number
+            draw_match = re.search(r'Draw Calls:\s*([\d,]+)', body, re.IGNORECASE)
+        if not draw_match:
+            # Fallback to generic pattern
+            draw_match = re.search(r'([\d,]+)\s*(?:draw calls?|draws?)', body, re.IGNORECASE)
+        if draw_match:
+            total_draw_calls = int(draw_match.group(1).replace(',', '')) if draw_match.group(1) else 0
+        else:
+            total_draw_calls = 0
+
+        # Try to find shader count (be specific about "Shaders" first)
+        shader_match = re.search(r'<p><strong>Shaders:</strong>\s*([\d,]+)</p>', body, re.IGNORECASE)
+        if not shader_match:
+            # Look for "Shaders:" text before the number
+            shader_match = re.search(r'Shaders:\s*([\d,]+)', body, re.IGNORECASE)
+        if not shader_match:
+            # Fallback to generic pattern
+            shader_match = re.search(r'([\d,]+)\s*shaders?', body, re.IGNORECASE)
+        if shader_match:
+            total_shaders = int(shader_match.group(1).replace(',', '')) if shader_match.group(1) else 0
+        else:
+            total_shaders = 0
 
         # Assume single frame for now
         frame_count = 1

@@ -79,8 +79,40 @@ Enhanced detection capabilities include:
 - **Shader Performance**: Instruction count analysis for all shader stages
 - **Memory Management**: Texture size and compression detection
 - **Overdraw Analysis**: Pixel overdraw ratio measurement
+- **Mali GPU Analysis**: Shader complexity analysis using ARM's Mali Offline Compiler (malioc)
 
-### 3. Custom Configuration
+### 3. Mali GPU Shader Analysis (Optional)
+
+For mobile developers targeting Mali GPUs (commonly found in Android devices), the tool provides detailed shader complexity analysis using ARM's Mali Offline Compiler (malioc).
+
+**Setup:**
+1. Download and install [ARM Mobile Studio](https://developer.arm.com/Tools%20and%20Software/Arm%20Mobile%20Studio)
+2. Set the `MALIOC_PATH` environment variable to point to the malioc executable, or configure it in your config file
+
+**Enable Mali Analysis:**
+```json
+{
+  "thresholds": {
+    "mali": {
+      "enabled": true,
+      "target_gpu": "Mali-G78",
+      "max_cycles": 50,
+      "max_registers": 32
+    }
+  }
+}
+```
+
+**What it detects:**
+- **High Cycle Count**: Shaders with excessive GPU cycles (>50 cycles by default)
+- **Register Pressure**: High work register usage that reduces GPU occupancy (>32 registers)
+- **Stack Spilling**: Shaders that exceed available registers, causing performance penalties
+- **Excessive Texture Sampling**: Shaders with too many texture samples (>8 samples)
+- **Branch Complexity**: Complex branching patterns that may cause divergence
+
+**Note:** Mali analysis is disabled by default to avoid unnecessary messages for developers not targeting Mali GPUs. Enable it explicitly in your configuration if needed.
+
+### 4. Custom Configuration
 Flexible configuration options:
 
 ```json
@@ -98,14 +130,14 @@ Flexible configuration options:
 }
 ```
 
-### 4. Multi-Platform Support
+### 5. Multi-Platform Support
 Optimized for various graphics APIs:
 - OpenGL
 - Vulkan
 - DirectX 11/12
 - Metal
 
-### 5. Comprehensive Reporting
+### 6. Comprehensive Reporting
 - Performance metrics with severity classification
 - Optimized suggestions for common bottlenecks
 - Visualizations using Markdeep and Mermaid

@@ -19,6 +19,15 @@
     "memory": {
       "max_texture_size": 4096,
       "require_compressed_textures": false
+    },
+    "mali": {
+      "enabled": false,
+      "target_gpu": "Mali-G78",
+      "max_cycles": 100,
+      "max_cycles_critical": 200,
+      "max_registers": 48,
+      "max_texture_samples": 16,
+      "max_branches": 20
     }
   }
 }
