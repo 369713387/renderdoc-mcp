@@ -385,15 +385,20 @@ class MaliocRunner:
     def _parse_text_output(self, text: str, output: MaliocOutput) -> MaliocOutput:
         """Parse malioc text output.
         
-        malioc output format varies by version, but typically includes:
-        - Work registers: N
-        - Uniform registers: N
-        - Stack spilling: Yes/No
+        malioc output format varies by version:
+        
+        v8.x (newer) uses table format:
+                                        A      LS       V       T    Bound
+        Total instruction cycles:    1.00    0.50    0.06    0.12        T
+        Shortest path cycles:        0.50    0.25    0.06    0.12        T
+        Longest path cycles:         1.00    0.50    0.06    0.12        T
+        
+        Where A=Arithmetic, LS=Load/Store, V=Varying, T=Texture
+        
+        v7.x (older) uses line format:
         - Arithmetic: N cycles
         - Load/Store: N cycles
-        - Varying: N cycles
-        - Texture: N cycles
-        - Total cycles: N
+        - etc.
         
         Args:
             text: Raw malioc output text
@@ -405,97 +410,155 @@ class MaliocRunner:
         lines = text.strip().split('\n')
         
         for line in lines:
-            line = line.strip()
+            line_stripped = line.strip()
             
-            # Work registers
-            match = re.search(r'Work registers:\s*(\d+)', line)
+            # Work registers (e.g., "Work registers: 6 (18% used at 100% occupancy)")
+            match = re.search(r'Work registers:\s*(\d+)', line_stripped)
             if match:
                 output.work_registers = int(match.group(1))
                 continue
             
             # Uniform registers
-            match = re.search(r'Uniform registers:\s*(\d+)', line)
+            match = re.search(r'Uniform registers:\s*(\d+)', line_stripped)
             if match:
                 output.uniform_registers = int(match.group(1))
                 continue
             
-            # Stack spilling
-            if 'Stack spilling' in line:
-                output.stack_spilling = 'Yes' in line or 'true' in line.lower()
+            # Stack spilling / Stack use
+            if 'Stack spilling' in line_stripped or 'Stack use' in line_stripped:
+                output.stack_spilling = 'Yes' in line_stripped or 'true' in line_stripped.lower()
                 continue
             
-            # Arithmetic cycles
-            match = re.search(r'Arithmetic:\s*([\d.]+)\s*(?:cycles?)?', line, re.IGNORECASE)
+            # ===== malioc v8.x table format =====
+            # Format: "Total instruction cycles:    A      LS       V       T    Bound"
+            # Example: "Total instruction cycles:    1.00    0.50    0.06    0.12        T"
+            # The columns are: A (Arithmetic), LS (Load/Store), V (Varying), T (Texture), Bound
+            
+            # Parse "Total instruction cycles:" line with table values
+            match = re.match(
+                r'Total instruction cycles:\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
+                line_stripped,
+                re.IGNORECASE
+            )
             if match:
+                output.arithmetic_cycles = float(match.group(1))
+                output.load_store_cycles = float(match.group(2))
+                output.varying_cycles = float(match.group(3))
+                output.texture_cycles = float(match.group(4))
+                # Set total_cycles as the maximum (bound unit)
+                output.total_cycles = max(
+                    output.arithmetic_cycles,
+                    output.load_store_cycles,
+                    output.varying_cycles,
+                    output.texture_cycles
+                )
+                continue
+            
+            # Parse "Shortest path cycles:" line with table values
+            match = re.match(
+                r'Shortest path cycles:\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
+                line_stripped,
+                re.IGNORECASE
+            )
+            if match:
+                # Take the max of A, LS, V, T as shortest path
+                output.shortest_path_cycles = max(
+                    float(match.group(1)),
+                    float(match.group(2)),
+                    float(match.group(3)),
+                    float(match.group(4))
+                )
+                continue
+            
+            # Parse "Longest path cycles:" line with table values
+            match = re.match(
+                r'Longest path cycles:\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
+                line_stripped,
+                re.IGNORECASE
+            )
+            if match:
+                # Take the max of A, LS, V, T as longest path
+                output.longest_path_cycles = max(
+                    float(match.group(1)),
+                    float(match.group(2)),
+                    float(match.group(3)),
+                    float(match.group(4))
+                )
+                continue
+            
+            # ===== malioc v7.x line format (fallback) =====
+            # Arithmetic cycles (old format)
+            match = re.search(r'Arithmetic:\s*([\d.]+)\s*(?:cycles?)?', line_stripped, re.IGNORECASE)
+            if match and output.arithmetic_cycles == 0:
                 output.arithmetic_cycles = float(match.group(1))
                 continue
             
-            # Load/Store cycles
-            match = re.search(r'Load/Store:\s*([\d.]+)\s*(?:cycles?)?', line, re.IGNORECASE)
-            if match:
+            # Load/Store cycles (old format)
+            match = re.search(r'Load/Store:\s*([\d.]+)\s*(?:cycles?)?', line_stripped, re.IGNORECASE)
+            if match and output.load_store_cycles == 0:
                 output.load_store_cycles = float(match.group(1))
                 continue
             
-            # Varying cycles
-            match = re.search(r'Varying:\s*([\d.]+)\s*(?:cycles?)?', line, re.IGNORECASE)
-            if match:
+            # Varying cycles (old format)
+            match = re.search(r'Varying:\s*([\d.]+)\s*(?:cycles?)?', line_stripped, re.IGNORECASE)
+            if match and output.varying_cycles == 0:
                 output.varying_cycles = float(match.group(1))
                 continue
             
-            # Texture cycles
-            match = re.search(r'Texture:\s*([\d.]+)\s*(?:cycles?)?', line, re.IGNORECASE)
-            if match:
+            # Texture cycles (old format)
+            match = re.search(r'Texture:\s*([\d.]+)\s*(?:cycles?)?', line_stripped, re.IGNORECASE)
+            if match and output.texture_cycles == 0:
                 output.texture_cycles = float(match.group(1))
                 continue
             
-            # Total cycles (various formats)
-            match = re.search(r'Total\s+(?:instruction\s+)?cycles:\s*([\d.]+)', line, re.IGNORECASE)
-            if match:
+            # Total cycles (old format - single value)
+            match = re.search(r'Total\s+(?:instruction\s+)?cycles:\s*([\d.]+)$', line_stripped, re.IGNORECASE)
+            if match and output.total_cycles == 0:
                 output.total_cycles = float(match.group(1))
                 continue
             
-            # Shortest/longest path cycles
-            match = re.search(r'Shortest path cycles:\s*([\d.]+)', line, re.IGNORECASE)
-            if match:
+            # Shortest/longest path cycles (old format - single value)
+            match = re.search(r'Shortest path cycles:\s*([\d.]+)$', line_stripped, re.IGNORECASE)
+            if match and output.shortest_path_cycles == 0:
                 output.shortest_path_cycles = float(match.group(1))
                 continue
             
-            match = re.search(r'Longest path cycles:\s*([\d.]+)', line, re.IGNORECASE)
-            if match:
+            match = re.search(r'Longest path cycles:\s*([\d.]+)$', line_stripped, re.IGNORECASE)
+            if match and output.longest_path_cycles == 0:
                 output.longest_path_cycles = float(match.group(1))
                 continue
             
             # Instruction counts
-            match = re.search(r'Total instructions:\s*(\d+)', line, re.IGNORECASE)
+            match = re.search(r'Total instructions:\s*(\d+)', line_stripped, re.IGNORECASE)
             if match:
                 output.total_instructions = int(match.group(1))
                 continue
             
             # Arithmetic instructions
-            match = re.search(r'Arithmetic instructions:\s*(\d+)', line, re.IGNORECASE)
+            match = re.search(r'Arithmetic instructions:\s*(\d+)', line_stripped, re.IGNORECASE)
             if match:
                 output.arithmetic_instructions = int(match.group(1))
                 continue
             
             # Load/Store instructions
-            match = re.search(r'Load/Store instructions:\s*(\d+)', line, re.IGNORECASE)
+            match = re.search(r'Load/Store instructions:\s*(\d+)', line_stripped, re.IGNORECASE)
             if match:
                 output.load_store_instructions = int(match.group(1))
                 continue
             
             # Texture instructions
-            match = re.search(r'Texture instructions:\s*(\d+)', line, re.IGNORECASE)
+            match = re.search(r'Texture instructions:\s*(\d+)', line_stripped, re.IGNORECASE)
             if match:
                 output.texture_instructions = int(match.group(1))
                 continue
             
             # Branch instructions
-            match = re.search(r'Branch instructions:\s*(\d+)', line, re.IGNORECASE)
+            match = re.search(r'Branch instructions:\s*(\d+)', line_stripped, re.IGNORECASE)
             if match:
                 output.branch_instructions = int(match.group(1))
                 continue
         
-        # Calculate total cycles if not found directly
+        # Calculate total cycles if still not set
         if output.total_cycles == 0:
             output.total_cycles = max(
                 output.arithmetic_cycles,

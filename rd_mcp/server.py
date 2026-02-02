@@ -127,7 +127,8 @@ async def handle_list_tools() -> list[Tool]:
                 "Requires RenderDoc to be installed. Works with any Python version. "
                 "Supports preset configurations for different performance profiles. "
                 "When mali_enabled is True, uses Mali Offline Compiler (malioc) to analyze "
-                "shader GPU cycles and register usage for Mali GPUs."
+                "shader GPU cycles and register usage for Mali GPUs. "
+                "When output_path is provided, saves JSON and Markdown reports to the specified directory."
             ),
             inputSchema={
                 "type": "object",
@@ -156,6 +157,12 @@ async def handle_list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Target Mali GPU for shader analysis. "
                                       "Examples: 'Mali-G78', 'Mali-G710', 'Mali-G720'. Default: 'Mali-G78'"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional directory path to save analysis reports. "
+                                      "When provided, generates both JSON and Markdown report files. "
+                                      "Files are named as '{rdc_name}_analysis_{timestamp}.json/.md'"
                     }
                 },
                 "required": ["rdc_path"]
@@ -424,7 +431,7 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
 
     Args:
         arguments: Tool arguments containing rdc_path and optional config_path, preset, 
-                   mali_enabled, and mali_target_gpu
+                   mali_enabled, mali_target_gpu, and output_path
 
     Returns:
         TextContent containing analysis results
@@ -437,13 +444,16 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
     preset = arguments.get("preset")
     mali_enabled = arguments.get("mali_enabled", False)
     mali_target_gpu = arguments.get("mali_target_gpu", "Mali-G78")
+    output_path = arguments.get("output_path")
+
+    # Import Path at the top of the function for consistent usage
+    from pathlib import Path
 
     try:
         # Initialize analyzer with optional custom config or preset
         if preset:
             analyzer = Analyzer(preset=preset)
         else:
-            from pathlib import Path
             path = Path(config_path) if config_path else None
             analyzer = Analyzer(config_path=path)
 
@@ -509,6 +519,18 @@ async def analyze_rdc(arguments: dict[str, Any]) -> list[TextContent]:
 
         # Format results (with optional Mali analysis)
         output = format_rdc_analysis_result(result, rdc_data, mali_result)
+
+        # Save reports if output_path is provided
+        report_files = None
+        if output_path:
+            from rd_mcp.report_generator import ReportGenerator
+            generator = ReportGenerator(rdc_path, result, rdc_data, mali_result)
+            report_files = generator.save_all(Path(output_path))
+            
+            # Append report file info to output
+            output += "\n---\n\n## 📁 Report Files Generated\n\n"
+            output += f"- JSON Report: `{report_files['json']}`\n"
+            output += f"- Markdown Report: `{report_files['markdown']}`\n"
 
         return [TextContent(type="text", text=output)]
 
